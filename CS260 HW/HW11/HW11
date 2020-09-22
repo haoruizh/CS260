@@ -1,0 +1,94 @@
+
+#Write a MIPS program to implement the following single digit adder:
+#keyboard input: X+Y=
+#display output: X+Y=Z
+#where X and Y are single digits (such as 2 and 7) and Z is the result (such
+#as 9). A possible way to implement:
+
+#4. To test your code, you need open the MMIO in the simulator. Goto Tools?Keyboard and Display MMIO ? make sure you press “connect to
+#MIPS” to run your code. Sometimes, it is also helpful to press “reset” on the same screen.
+#5. Hint: a way to convert a byte storing a single digit into the value of the digit, and the converse (my code is untested)
+#6. Dont forget to store registers when you write MIPS functions
+#7. To slow down execution in the simulator, slide ”Run speed to max” bar to the left.
+
+.data
+	array: .space 24 #stores 6 integers (value)
+	asciiZero: .byte '0' #asciiZero = '0'
+.text
+.globl main
+main:
+	la $s0, array #s0->array add
+	lui $s1, 0xffff #s1 holds the addr of receiver and transmitter
+	li $t3, 4 #t3->count the receiver polling loop and transmitter polling loop
+#Turn on the transmitter ready bit
+	lw $s2, 8($s1) #s2 holds the content of transmitter control
+	ori $s2, $s1, 0x0001 #turn on the transmitter ready bit
+	sw $s2, 8($s1) #save s2 to s1
+#1. Polling on the receiver control and read the byte from the receiver data. Doing this for four times so that the four characters X, +, Y, = are
+#stored in an array.	
+Loop0: #doing receiver polling 4 times
+	Loop1:
+		lw $t1, 0($s1) #t1 holds the content of receiver control
+		andi $t2, $t1, 0x0001 #if t1 == 0x0001, t2 = 1
+		beqz $t2, Loop1 #check the ready bit. If the ready bit is 0, then keep looping
+	#write to array
+	lw $a0, 4($s1) #a0 stores the content of receiver data and pass it to the function as an argument
+	jal asciiToValue #jump to asciiToValue, convert a0 to value
+	sw $v0, 0($s0) #write converted value to array
+	addi $s0, $s0, 4 #update array index
+	#check for run the loop
+	subi $t3, $t3, 1 #t3+1
+	bgt $t3, $zero, Loop0 #if t3 == 0, exit loop
+#2. Compute the result Z. You need find your own way of converting the ascii byte for a digit into the value of the digit so that the value of Z 
+#can be computed. Store the ascii bytes (the result Z might have two digits) into the array.
+	la $s0, array
+	lw $t4,0($s0) #t4 -> content of x
+	lw $t5, 8($s0) #t5 -> content of y
+	add $s3, $t4, $t5 #s3->z=x+y
+	bgt $s3, 10, biggerThan10
+	li $s2, 0 #s2 = first digit
+	sw $s2, 16($s0)
+	sw $s3, 20($s0)
+#Converting value to ascii loop
+convert:
+	li $t3, 6
+convertLoop_valueToAscii:
+	lw $a0, 0($s0) #get element
+	jal valueToAscii#convert to Ascii
+	sw $v0, 0($s0) #save converted item to array
+	addi $s0, $s0, 4 #s0+4
+	subi $t3, $t3, 1#t3--
+	bgt $t3, $zero, convertLoop_valueToAscii #if t6==0, exit loop
+#3. Polling on the transmitter control and write into the transmitter data so that the experssion (such as 5+7=12) is sent to the display.
+	li $t3, 6
+	la $s0, array
+Loop3:
+	lw $t1, 0($s0) #t1->item of array
+	Loop2:
+		lw $t2, 8($s1) #t1 holds the content of transmitter control
+		andi $t4, $t2, 0x0001 #t2 holds the transmitter control ready bit
+		beq $t4, $zero, Loop2 #if transmitter control is not ready, keep looping
+	sw $t1, 12($s1) #t1 writes the transmitter data
+	subi $t3, $t3, 1
+	addi $s0, $s0, 4#increment array
+	bgt $t3, $zero, Loop3
+#Exit program
+li $v0, 10
+syscall
+#Character to number
+asciiToValue:
+	lb $t4, asciiZero
+	subu $v0, $a0, $t4 #ascii to value
+	jr $ra #jump back to $ra
+
+#number to character
+valueToAscii:
+	lb $t4, asciiZero
+	addu $v0, $a0, $t4 #value to Ascii
+	jr $ra #jump back to $ra
+biggerThan10:
+	subi $t4, $s3, 10 #t4=result-10
+	li $s3, 1 #t3 = first digit=1
+	sw $s3, 16($s0) #stores the first digit into array
+	sw $t4, 20($s0) #stores the second digit into array
+	j convert #Jump to convert
